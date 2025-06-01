@@ -1,0 +1,116 @@
+1. Initially  my telnet server was not listening on port 23. Hence I had to create a service on port 23 for simulating listening activity.
+
+
+PS C:\WINDOWS\system32> $listener = [System.Net.Sockets.TcpListener]23; $listener.Start(); Write-Host "Listening on port 23..."
+Listening on port 23...
+PS C:\WINDOWS\system32>
+
+
+
+2. Before creating the firewall rule I test ran my telnet server service because If no service is listening on port 23, you’ll always get a failed connection — with or without the firewall rule. So you can’t directly tell if the block rule is responsible. So in a second powershell window using administrator option I ran the following command
+
+PS C:\WINDOWS\system32> Test-NetConnection -ComputerName localhost -Port 23                                            
+ WARNING: TCP connect to (::1 : 23) failed                                                                                                                                                                                                       
+ComputerName     : localhost
+RemoteAddress    : 127.0.0.1
+RemotePort       : 23
+InterfaceAlias   : Loopback Pseudo-Interface 1
+SourceAddress    : 127.0.0.1
+TcpTestSucceeded : True
+
+
+
+3. "TcpTestSucceeded : True"  means the rule is not in place, if had shown "false", then it would have meant that the rule is in place and working.
+
+
+
+
+4. Now I will check if any service is listening on port 23 to verify that my created service is listening on port 23 by running the following commnad in powershell using administrator privileges
+
+PS C:\WINDOWS\system32> netstat -an | findstr ":23"
+  TCP    0.0.0.0:23             0.0.0.0:0              LISTENING
+PS C:\WINDOWS\system32>
+
+
+
+
+5. This lists all connections and listeners involving port 23.
+
+you can see a line with 0.0.0.0:23 and the state is LISTENING, that means something is listening on port 23 on my machine (likely the Telnet server).
+
+
+
+6. Now I have created a rule in advanced menu option in windows firewall using the following steps
+
+Method 1: Using Windows Firewall with Advanced Security (GUI)
+Open Windows Firewall with Advanced Security
+
+#1. Press Win + R, type wf.msc, and press Enter.
+
+#2. Create a New Inbound Rule
+
+#3. In the left pane, click Inbound Rules.
+
+#4. In the right pane, click New Rule…
+
+#5. Select Rule Type
+
+#6. Choose Port and click Next.
+
+#7. Specify Protocol and Ports
+
+#8. Select TCP (Telnet uses TCP).
+
+#9. Select Specific local ports and enter 23.
+
+#10. Click Next.
+
+#11. Action
+
+#12. Choose Block the connection.
+
+#13. Click Next.
+
+#14. Profile
+
+#15. Choose when the rule applies (Domain, Private, Public). Usually, select all.
+
+#16. Click Next.
+
+#17. Name the Rule
+
+#18. Give it a name like Block Telnet Port 23.
+
+#19. Click Finish.
+
+
+7. After creating the rule checked if it works, but although rule shows active and  everything is alright, it is still not blocking the incoming connection, the reason for which could be any other rules by any other application on the same port 23 which may be overriding my rule or because on the local host incoming connection bypasses the firewall......i.e. between local host to local host.
+
+
+
+8. Removing my rule.
+
+
+
+KEY OBSERVATION
+
+The test failed to connect to ::1 (IPv6), but succeeded on 127.0.0.1 (IPv4), even though my firewall rule should block inbound TCP on port 23.
+
+But here's the critical point:
+
+🔒 Windows Firewall does not block traffic on the loopback interface (localhost ➜ localhost)
+This is by design — Windows Firewall is only enforced on traffic entering the machine from the network, not traffic that originates from and terminates on the same host (like localhost tests).
+
+✅ What This Means
+My firewall rule is working as intended, but:
+
+Firewall rules don’t apply to loopback traffic (127.0.0.1 or ::1).
+
+So when I test using localhost, I was actually bypassing the firewall entirely.
+
+This explains why:
+
+I see TcpTestSucceeded : True despite your block rule.
+
+I see a warning on IPv6 but a success on IPv4 — because 127.0.0.1 is a local shortcut and never hits the firewall engine.
+
